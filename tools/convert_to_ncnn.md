@@ -62,13 +62,13 @@ The Python training/export path uses:
 - pixel format: `BGR`
 - resize: `64x64`
 - normalization:
-  - mean: `[0.5, 0.5, 0.5]`
-  - std: `[0.5, 0.5, 0.5]`
+  - mean: `[0.406, 0.456, 0.485]`
+  - std: `[0.225, 0.224, 0.229]`
 
 Equivalent `ncnn` preprocessing in C++:
 
-- `mean_vals = {127.5f, 127.5f, 127.5f}`
-- `norm_vals = {1/127.5f, 1/127.5f, 1/127.5f}`
+- `mean_vals = {103.53f, 116.28f, 123.675f}`
+- `norm_vals = {1/57.375f, 1/57.12f, 1/58.395f}`
 
 If you change training normalization later, keep the C++ side synchronized.
 

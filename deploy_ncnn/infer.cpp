@@ -91,8 +91,13 @@ int main(int argc, char** argv)
         return 1;
     }
 
-    const float mean_vals[3] = {127.5f, 127.5f, 127.5f};
-    const float norm_vals[3] = {1.0f / 127.5f, 1.0f / 127.5f, 1.0f / 127.5f};
+    // BGR mean/std aligned with the training pipeline.
+    const float mean_vals[3] = {103.53f, 116.28f, 123.675f};
+    const float norm_vals[3] = {
+        1.0f / 57.375f,
+        1.0f / 57.12f,
+        1.0f / 58.395f,
+    };
 
     const auto t0 = std::chrono::high_resolution_clock::now();
 

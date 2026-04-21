@@ -126,7 +126,7 @@ Reference inference example:
 ## Notes
 
 - Training and inference both use `BGR` preprocessing to stay aligned with OpenCV and `ncnn`.
-- The default normalization is equivalent to mapping pixel values from `[0, 255]` to `[-1, 1]`.
+- The default normalization uses `BGR mean=[0.406, 0.456, 0.485]` and `std=[0.225, 0.224, 0.229]`.
 - If you later change `mean/std`, make the same change in both `predict.py` and `deploy_ncnn/infer.cpp`.
 - When using the single-root dataset layout, the generated split manifest is saved to `output_dir/split_manifest.json`.
 - The PC-side validation script currently accepts only `.bmp` input images.
