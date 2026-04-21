@@ -1,53 +1,61 @@
-# ONNX to ncnn
+# Export to ncnn with pnnx
 
-This baseline uses only deployment-friendly operators, so the default export path is:
+This project now uses:
 
-`PyTorch -> ONNX -> ncnn`
+`PyTorch checkpoint -> ONNX (intermediate) -> pnnx -> ncnn`
 
-## 1. Export ONNX
+The final target files are:
+
+`model.param + model.bin`
+
+## 1. Export ncnn directly
 
 ```bash
-python export_onnx.py --checkpoint outputs/tiny_cls/best.pt --output onnx/tiny_cls.onnx
+python export_onnx.py ^
+  --checkpoint outputs/tiny_cls/best.pt ^
+  --ncnn-param deploy_ncnn/model.param ^
+  --ncnn-bin deploy_ncnn/model.bin ^
+  --pnnx-path D:\tools\pnnx.exe
 ```
 
-You can also export `ONNX + ncnn` in one command:
+By default, only the final `ncnn` files are kept.
+Intermediate `onnx` and auxiliary `pnnx` files are deleted automatically.
+
+## 2. Keep the intermediate ONNX file if needed
 
 ```bash
 python export_onnx.py ^
   --checkpoint outputs/tiny_cls/best.pt ^
   --output onnx/tiny_cls.onnx ^
   --ncnn-param deploy_ncnn/model.param ^
-  --ncnn-bin deploy_ncnn/model.bin
+  --ncnn-bin deploy_ncnn/model.bin ^
+  --pnnx-path D:\tools\pnnx.exe ^
+  --keep-onnx
 ```
 
-## 2. Convert to ncnn
-
-If `onnx2ncnn` is already available:
+If you need the extra `pnnx` debug artifacts too, add:
 
 ```bash
-onnx2ncnn onnx/tiny_cls.onnx deploy_ncnn/tiny_cls.param deploy_ncnn/tiny_cls.bin
+--keep-pnnx-artifacts
 ```
 
-Optional model optimization:
+## 3. pnnx options
 
-```bash
-ncnnoptimize deploy_ncnn/tiny_cls.param deploy_ncnn/tiny_cls.bin deploy_ncnn/tiny_cls-opt.param deploy_ncnn/tiny_cls-opt.bin 0
-```
+The export script forwards a few useful options to `pnnx`:
 
-## 3. Quantization suggestion
+- `--fp16 1` or `0`
+- `--optlevel 0`, `1`, or `2`
+
+Defaults are:
+
+- `fp16=1`
+- `optlevel=2`
+
+## 4. Quantization suggestion
 
 To reach the `< 8 ms` target on `Loongson 2K0300`, plan for `ncnn INT8` after the FP32 baseline is verified.
 
-Typical flow:
-
-1. Prepare a calibration image list from the training set.
-2. Generate quantization table with the official `ncnn2table` tool.
-3. Convert the FP32 model to INT8 using `ncnn2int8`.
-4. Benchmark again on the target board.
-
-Exact command names can differ slightly depending on your local `ncnn` build version, so check the tool binaries built with your current `ncnn`.
-
-## 4. Preprocessing consistency
+## 5. Preprocessing consistency
 
 The Python training/export path uses:
 
@@ -64,7 +72,7 @@ Equivalent `ncnn` preprocessing in C++:
 
 If you change training normalization later, keep the C++ side synchronized.
 
-## 5. Output tensor
+## 6. Output tensor
 
 The ONNX and `ncnn` models output raw logits of length `3`.
 Apply softmax in post-processing to obtain class probabilities.

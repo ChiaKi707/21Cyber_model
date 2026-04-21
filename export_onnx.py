@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import shutil
 import subprocess
+import tempfile
 from pathlib import Path
 
 import torch
@@ -11,54 +12,50 @@ from models import TinyClassifier
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Export a trained PyTorch model to ONNX.")
+    parser = argparse.ArgumentParser(
+        description="Export a trained PyTorch model to ncnn via ONNX + pnnx."
+    )
     parser.add_argument("--checkpoint", type=str, required=True, help="Path to best.pt or last.pt.")
-    parser.add_argument("--output", type=str, required=True, help="ONNX output path.")
+    parser.add_argument(
+        "--output",
+        type=str,
+        default=None,
+        help="Optional ONNX output path. If omitted, a temporary ONNX file is used.",
+    )
+    parser.add_argument("--ncnn-param", type=str, required=True, help="ncnn param output path.")
+    parser.add_argument("--ncnn-bin", type=str, required=True, help="ncnn bin output path.")
     parser.add_argument("--opset", type=int, default=12, help="ONNX opset version.")
     parser.add_argument(
-        "--ncnn-param",
+        "--pnnx-path",
         type=str,
-        default=None,
-        help="Optional ncnn param output path. If set, the script will also export .param and .bin.",
+        default="pnnx",
+        help="Path to the pnnx executable, such as pnnx.exe on Windows.",
     )
     parser.add_argument(
-        "--ncnn-bin",
-        type=str,
-        default=None,
-        help="Optional ncnn bin output path. If set, the script will also export .param and .bin.",
-    )
-    parser.add_argument(
-        "--onnx2ncnn-path",
-        type=str,
-        default="onnx2ncnn",
-        help="Path to the onnx2ncnn executable.",
-    )
-    parser.add_argument(
-        "--optimize",
+        "--keep-onnx",
         action="store_true",
-        help="Run ncnnoptimize after onnx2ncnn and write optimized param/bin outputs.",
+        help="Keep the exported ONNX file. If --output is omitted, a temp file is still removed automatically.",
     )
     parser.add_argument(
-        "--ncnnoptimize-path",
-        type=str,
-        default="ncnnoptimize",
-        help="Path to the ncnnoptimize executable.",
+        "--keep-pnnx-artifacts",
+        action="store_true",
+        help="Keep auxiliary pnnx files such as .pnnx.param, .pnnx.bin and generated python stubs.",
+    )
+    parser.add_argument(
+        "--fp16",
+        type=int,
+        default=1,
+        choices=[0, 1],
+        help="Pass fp16 option to pnnx. 1 saves ncnn weights in fp16 when supported.",
+    )
+    parser.add_argument(
+        "--optlevel",
+        type=int,
+        default=2,
+        choices=[0, 1, 2],
+        help="Pass graph optimization level to pnnx.",
     )
     return parser.parse_args()
-
-
-def resolve_ncnn_outputs(
-    onnx_output: Path,
-    ncnn_param: str | None,
-    ncnn_bin: str | None,
-) -> tuple[Path | None, Path | None]:
-    if ncnn_param is None and ncnn_bin is None:
-        return None, None
-
-    if (ncnn_param is None) != (ncnn_bin is None):
-        raise ValueError("--ncnn-param and --ncnn-bin must be provided together.")
-
-    return Path(ncnn_param), Path(ncnn_bin)
 
 
 def run_command(command: list[str]) -> None:
@@ -72,42 +69,55 @@ def run_command(command: list[str]) -> None:
         raise RuntimeError(f"Command failed with exit code {exc.returncode}: {' '.join(command)}") from exc
 
 
-def export_ncnn(
+def export_ncnn_with_pnnx(
     onnx_path: Path,
     param_path: Path,
     bin_path: Path,
-    onnx2ncnn_path: str,
-    optimize: bool,
-    ncnnoptimize_path: str,
-) -> tuple[Path, Path]:
+    pnnx_path: str,
+    fp16: int,
+    optlevel: int,
+) -> tuple[Path, Path, list[Path]]:
     param_path.parent.mkdir(parents=True, exist_ok=True)
     bin_path.parent.mkdir(parents=True, exist_ok=True)
 
-    onnx2ncnn_exe = shutil.which(onnx2ncnn_path) or onnx2ncnn_path
-    run_command([onnx2ncnn_exe, str(onnx_path), str(param_path), str(bin_path)])
+    pnnx_exe = shutil.which(pnnx_path) or pnnx_path
+    pnnx_artifact_base = param_path.with_suffix("")
+    pnnx_param_path = pnnx_artifact_base.with_suffix(".pnnx.param")
+    pnnx_bin_path = pnnx_artifact_base.with_suffix(".pnnx.bin")
+    pnnx_py_path = pnnx_artifact_base.with_name(f"{pnnx_artifact_base.name}_pnnx.py")
+    pnnx_onnx_path = pnnx_artifact_base.with_suffix(".pnnx.onnx")
+    ncnn_py_path = pnnx_artifact_base.with_name(f"{pnnx_artifact_base.name}_ncnn.py")
 
-    if not optimize:
-        return param_path, bin_path
+    command = [
+        pnnx_exe,
+        str(onnx_path),
+        f"ncnnparam={param_path}",
+        f"ncnnbin={bin_path}",
+        f"pnnxparam={pnnx_param_path}",
+        f"pnnxbin={pnnx_bin_path}",
+        f"pnnxpy={pnnx_py_path}",
+        f"pnnxonnx={pnnx_onnx_path}",
+        f"ncnnpy={ncnn_py_path}",
+        f"fp16={fp16}",
+        f"optlevel={optlevel}",
+    ]
+    run_command(command)
+    aux_files = [
+        pnnx_param_path,
+        pnnx_bin_path,
+        pnnx_py_path,
+        pnnx_onnx_path,
+        ncnn_py_path,
+    ]
+    return param_path, bin_path, aux_files
 
-    optimized_param = param_path.with_name(f"{param_path.stem}-opt{param_path.suffix}")
-    optimized_bin = bin_path.with_name(f"{bin_path.stem}-opt{bin_path.suffix}")
-    ncnnoptimize_exe = shutil.which(ncnnoptimize_path) or ncnnoptimize_path
-    run_command(
-        [
-            ncnnoptimize_exe,
-            str(param_path),
-            str(bin_path),
-            str(optimized_param),
-            str(optimized_bin),
-            "0",
-        ]
-    )
-    return optimized_param, optimized_bin
 
-
-def main() -> None:
-    args = parse_args()
-    checkpoint = torch.load(args.checkpoint, map_location="cpu")
+def export_onnx_model(
+    checkpoint_path: str,
+    output_path: Path,
+    opset: int,
+) -> tuple[list[str], int]:
+    checkpoint = torch.load(checkpoint_path, map_location="cpu")
     model = TinyClassifier(num_classes=checkpoint["num_classes"])
     model.load_state_dict(checkpoint["model_state"])
     model.eval()
@@ -115,37 +125,72 @@ def main() -> None:
     input_size = int(checkpoint["input_size"])
     dummy = torch.randn(1, 3, input_size, input_size, dtype=torch.float32)
 
-    output_path = Path(args.output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    ncnn_param_path, ncnn_bin_path = resolve_ncnn_outputs(output_path, args.ncnn_param, args.ncnn_bin)
-
     torch.onnx.export(
         model,
         dummy,
         str(output_path),
         export_params=True,
-        opset_version=args.opset,
+        opset_version=opset,
         do_constant_folding=True,
         input_names=["input"],
         output_names=["logits"],
         dynamic_axes=None,
     )
+    return checkpoint["class_names"], input_size
 
-    print(f"Exported ONNX model to: {output_path.resolve()}")
-    print("Input shape: [1, 3, 64, 64]")
-    print("Output shape: [1, 3]")
 
-    if ncnn_param_path is not None and ncnn_bin_path is not None:
-        final_param, final_bin = export_ncnn(
-            onnx_path=output_path,
-            param_path=ncnn_param_path,
-            bin_path=ncnn_bin_path,
-            onnx2ncnn_path=args.onnx2ncnn_path,
-            optimize=args.optimize,
-            ncnnoptimize_path=args.ncnnoptimize_path,
-        )
-        print(f"Exported ncnn param to: {final_param.resolve()}")
-        print(f"Exported ncnn bin to: {final_bin.resolve()}")
+def main() -> None:
+    args = parse_args()
+    ncnn_param_path = Path(args.ncnn_param)
+    ncnn_bin_path = Path(args.ncnn_bin)
+
+    if args.output is not None:
+        onnx_path = Path(args.output)
+        class_names, input_size = export_onnx_model(args.checkpoint, onnx_path, args.opset)
+        print(f"Exported ONNX model to: {onnx_path.resolve()}")
+    else:
+        with tempfile.TemporaryDirectory(prefix="tiny_cls_onnx_") as temp_dir:
+            onnx_path = Path(temp_dir) / "model.onnx"
+            class_names, input_size = export_onnx_model(args.checkpoint, onnx_path, args.opset)
+            final_param, final_bin, aux_files = export_ncnn_with_pnnx(
+                onnx_path=onnx_path,
+                param_path=ncnn_param_path,
+                bin_path=ncnn_bin_path,
+                pnnx_path=args.pnnx_path,
+                fp16=args.fp16,
+                optlevel=args.optlevel,
+            )
+            if not args.keep_pnnx_artifacts:
+                for aux_file in aux_files:
+                    aux_file.unlink(missing_ok=True)
+            print("Exported ONNX model to a temporary file for pnnx conversion.")
+            print(f"Input shape: [1, 3, {input_size}, {input_size}]")
+            print(f"Output shape: [1, {len(class_names)}]")
+            print(f"Exported ncnn param to: {final_param.resolve()}")
+            print(f"Exported ncnn bin to: {final_bin.resolve()}")
+            return
+
+    print(f"Input shape: [1, 3, {input_size}, {input_size}]")
+    print(f"Output shape: [1, {len(class_names)}]")
+
+    final_param, final_bin, aux_files = export_ncnn_with_pnnx(
+        onnx_path=onnx_path,
+        param_path=ncnn_param_path,
+        bin_path=ncnn_bin_path,
+        pnnx_path=args.pnnx_path,
+        fp16=args.fp16,
+        optlevel=args.optlevel,
+    )
+    print(f"Exported ncnn param to: {final_param.resolve()}")
+    print(f"Exported ncnn bin to: {final_bin.resolve()}")
+
+    if not args.keep_pnnx_artifacts:
+        for aux_file in aux_files:
+            aux_file.unlink(missing_ok=True)
+
+    if not args.keep_onnx:
+        onnx_path.unlink(missing_ok=True)
 
 
 if __name__ == "__main__":

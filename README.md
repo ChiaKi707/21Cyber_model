@@ -74,23 +74,20 @@ python train.py --data-root data --train-ratio 0.8 --val-ratio 0.1 --test-ratio 
 python predict.py --checkpoint outputs/tiny_cls/best.pt --image demo.bmp
 ```
 
-## Export ONNX
-
-```bash
-python export_onnx.py --checkpoint outputs/tiny_cls/best.pt --output onnx/tiny_cls.onnx
-```
-
-Export ONNX and ncnn files in one step:
+## Export ncnn
 
 ```bash
 python export_onnx.py ^
   --checkpoint outputs/tiny_cls/best.pt ^
-  --output onnx/tiny_cls.onnx ^
   --ncnn-param deploy_ncnn/model.param ^
-  --ncnn-bin deploy_ncnn/model.bin
+  --ncnn-bin deploy_ncnn/model.bin ^
+  --pnnx-path D:\tools\pnnx.exe
 ```
 
-If you also want optimized ncnn outputs:
+By default, the script keeps only the final `model.param` and `model.bin`.
+The intermediate `onnx` file and auxiliary `pnnx` files are cleaned up automatically.
+
+If you also want to keep the intermediate ONNX file:
 
 ```bash
 python export_onnx.py ^
@@ -98,7 +95,21 @@ python export_onnx.py ^
   --output onnx/tiny_cls.onnx ^
   --ncnn-param deploy_ncnn/model.param ^
   --ncnn-bin deploy_ncnn/model.bin ^
-  --optimize
+  --pnnx-path D:\tools\pnnx.exe ^
+  --keep-onnx
+```
+
+If you also want to inspect the auxiliary `pnnx` outputs:
+
+```bash
+python export_onnx.py ^
+  --checkpoint outputs/tiny_cls/best.pt ^
+  --output onnx/tiny_cls.onnx ^
+  --ncnn-param deploy_ncnn/model.param ^
+  --ncnn-bin deploy_ncnn/model.bin ^
+  --pnnx-path D:\tools\pnnx.exe ^
+  --keep-onnx ^
+  --keep-pnnx-artifacts
 ```
 
 ## ncnn conversion
