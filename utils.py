@@ -12,16 +12,16 @@ import torch
 DEFAULT_CONFIG = {
     "data_root": "data",
     "output_dir": "outputs/tiny_cls",
-    "epochs": 100,#60
+    "epochs": 60,#60
     "batch_size": 128,#128
     "num_workers": 4,
-    "lr": 8e-4,#1e-3
+    "lr": 1e-3,#1e-3 8e-4
     "weight_decay": 1e-4,
     "input_size": 64,
     "seed": 42,
-    "train_ratio": 0.8,
+    "train_ratio": 0.85, #0.8
     "val_ratio": 0.1,
-    "test_ratio": 0.1,
+    "test_ratio": 0.05, #0.05
     "mean": [0.406, 0.456, 0.485],
     "std": [0.225, 0.224, 0.229],
 }
