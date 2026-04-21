@@ -12,10 +12,10 @@ import torch
 DEFAULT_CONFIG = {
     "data_root": "data",
     "output_dir": "outputs/tiny_cls",
-    "epochs": 60,
-    "batch_size": 128,
+    "epochs": 100,#60
+    "batch_size": 128,#128
     "num_workers": 4,
-    "lr": 1e-3,
+    "lr": 8e-4,#1e-3
     "weight_decay": 1e-4,
     "input_size": 64,
     "seed": 42,
