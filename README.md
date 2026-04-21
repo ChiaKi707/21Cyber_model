@@ -74,6 +74,12 @@ python train.py --data-root data --train-ratio 0.8 --val-ratio 0.1 --test-ratio 
 python predict.py --checkpoint outputs/tiny_cls/best.pt --image demo.bmp
 ```
 
+Batch predict all BMP images in a folder:
+
+```bash
+python predict.py --checkpoint outputs/tiny_cls/best.pt --image-dir demo_images
+```
+
 ## Export ncnn
 
 ```bash
@@ -129,4 +135,4 @@ Reference inference example:
 - The default normalization uses `BGR mean=[0.406, 0.456, 0.485]` and `std=[0.225, 0.224, 0.229]`.
 - If you later change `mean/std`, make the same change in both `predict.py` and `deploy_ncnn/infer.cpp`.
 - When using the single-root dataset layout, the generated split manifest is saved to `output_dir/split_manifest.json`.
-- The PC-side validation script currently accepts only `.bmp` input images.
+- The PC-side validation script currently accepts only `.bmp` input images, whether using single-image or folder batch prediction.
