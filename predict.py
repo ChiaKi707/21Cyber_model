@@ -98,10 +98,11 @@ def predict_one_image(
 
 
 def print_confusion_matrix(matrix: np.ndarray, class_names: list[str]) -> None:
-    first_col_width = max(len("true\\pred"), *(len(name) for name in class_names))
+    true_pred_label = "true\\pred"
+    first_col_width = max(len(true_pred_label), *(len(name) for name in class_names))
     col_width = max(9, *(len(name) for name in class_names))
 
-    header = f"{'true\\pred':<{first_col_width}}"
+    header = f"{true_pred_label:<{first_col_width}}"
     for class_name in class_names:
         header += f" {class_name:>{col_width}}"
     print(header)
