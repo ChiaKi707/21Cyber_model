@@ -80,6 +80,17 @@ Batch predict all BMP images in a folder:
 python predict.py --checkpoint outputs/tiny_cls/best.pt --image-dir demo_images
 ```
 
+Batch predict with exported ncnn files on PC:
+
+```bash
+python predict_ncnn.py ^
+  --param deploy_ncnn/model.param ^
+  --bin deploy_ncnn/model.bin ^
+  --checkpoint outputs/tiny_cls/best.pt ^
+  --image-dir demo_images ^
+  --quiet
+```
+
 ## Export ncnn
 
 ```bash
